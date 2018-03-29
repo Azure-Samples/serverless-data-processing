@@ -1,0 +1,12 @@
+SELECT
+    Name,
+    SUBSTRING(CAST(MIN(DateTime) as nvarchar(max)),1,16) as DateTime,
+    COUNT(DateTime) as CountNum,
+    SUM("Distance")
+INTO
+    outputDestinationEvents
+FROM
+    inputSourceEvents TIMESTAMP BY DateTime
+GROUP BY
+    TumblingWindow( minute , 1 ),
+    Name

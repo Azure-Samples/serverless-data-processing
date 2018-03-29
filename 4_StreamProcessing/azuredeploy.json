@@ -1,0 +1,250 @@
+{
+  "$schema": "http://schema.management.azure.com/schemas/2014-04-01-preview/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "namespaceName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the EventHub namespace"
+      }
+    }
+  },
+  "variables": {
+    "hostplanName": "[concat('hostplan', uniqueString(resourceGroup().id))]",
+    "functionAppName": "[concat('funcionapp', uniqueString(resourceGroup().id))]",
+    "defaultSASKeyName": "RootManageSharedAccessKey",
+    "authRuleResourceId": "[resourceId('Microsoft.EventHub/namespaces/authorizationRules', parameters('namespaceName'), variables('defaultSASKeyName'))]",
+    "ehVersion": "2017-04-01",
+    "storageAccountName": "[concat(uniquestring(resourceGroup().id), 'standardsa')]",
+    "cosmosdb": "[concat(uniquestring(resourceGroup().id), 'cosmosdb')]",
+    "storageAccountType": "Standard_LRS",
+    "sourceEventHubName": "sourceeventhub",
+    "destinationEventHubName": "destinationeventhub",
+    "streamAnalyticsName": "[concat('anlyaggregation', uniqueString(resourceGroup().id))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.DocumentDB/databaseAccounts",
+      "kind": "GlobalDocumentDB",
+      "name": "[variables('cosmosdb')]",
+      "apiVersion": "2015-04-08",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "defaultExperience": "Table"
+      },
+      "properties": {
+        "databaseAccountOfferType": "Standard",
+        "locations": [
+          {
+            "id": "[concat(variables('cosmosdb'),'-',resourceGroup().location)]",
+            "failoverPriority": 0,
+            "locationName": "[resourceGroup().location]"
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "EnableTable"
+          }
+        ]
+      },
+      "dependsOn": []
+    },
+    {
+      "apiVersion": "2015-08-01",
+      "name": "[variables('hostplanName')]",
+      "type": "Microsoft.Web/serverfarms",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "HostingPlan"
+      },
+      "sku": {
+        "name": "B1",
+        "tier": "Basic",
+        "size": "B1",
+        "family": "B",
+        "capacity": 1
+      },
+      "properties": {
+        "name": "[variables('hostplanName')]"
+      }
+    },
+    {
+      "apiVersion": "2015-08-01",
+      "name": "[variables('functionAppName')]",
+      "type": "Microsoft.Web/sites",
+      "location": "[resourceGroup().location]",
+      "kind": "functionapp",
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostplanName'))]",
+        "siteConfig": {
+          "AlwaysOn": true
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverFarms', variables('hostplanName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ],
+      "resources": [
+        {
+          "apiVersion": "2015-08-01",
+          "name": "appsettings",
+          "type": "config",
+          "dependsOn": [
+            "[resourceId('Microsoft.Web/Sites/', variables('functionAppName'))]",
+            "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+          ],
+          "properties": {
+            "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=',variables('storageaccountName'),';AccountKey=',concat(listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageaccountName')),'2017-06-01').keys[0].value))]",
+            "AzureWebJobsDashboard": "[concat('DefaultEndpointsProtocol=https;AccountName=',variables('storageaccountName'),';AccountKey=',concat(listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageaccountName')),'2017-06-01').keys[0].value))]",
+            "CosmosDBConnectionString": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('cosmosdb'),';AccountKey=',listKeys(resourceId('Microsoft.DocumentDB/databaseAccounts', variables('cosmosdb')), '2015-11-06').primaryMasterKey, ';TableEndpoint=https://', variables('cosmosdb'),'.table.cosmosdb.azure.com:443/;')]",
+            "FUNCTIONS_EXTENSION_VERSION": "~1",
+            "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING": "[concat('DefaultEndpointsProtocol=https;AccountName=',variables('storageaccountName'),';AccountKey=',concat(listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageaccountName')),'2017-06-01').keys[0].value))]",
+            "WEBSITE_CONTENTSHARE": "[variables('storageaccountName')]",
+            "WEBSITE_NODE_DEFAULT_VERSION": "6.5.0",
+            "EventHubConnectionString": "[listkeys(variables('authRuleResourceId'), variables('ehVersion')).primaryConnectionString]"
+          }
+        }
+      ]
+    },
+    {
+      "apiVersion": "2017-04-01",
+      "name": "[parameters('namespaceName')]",
+      "type": "Microsoft.EventHub/namespaces",
+      "location": "[resourceGroup().location]",
+      "sku": {
+        "name": "Standard"
+      },
+      "properties": {
+        "isAutoInflateEnabled": false,
+        "maximumThroughputUnits": 0
+      }
+    },
+    {
+      "apiVersion": "2017-04-01",
+      "name": "[concat(parameters('namespaceName'), '/',variables('sourceEventHubName'))]",
+      "type": "Microsoft.EventHub/namespaces/eventhubs",
+      "dependsOn": [
+        "[resourceId('Microsoft.EventHub/namespaces',parameters('namespaceName'))]"
+      ],
+      "properties": {
+        "messageRetentionInDays": 1,
+        "partitionCount": 2
+      }
+    },
+    {
+      "apiVersion": "2017-04-01",
+      "name": "[concat(parameters('namespaceName'), '/',variables('destinationEventHubName'))]",
+      "type": "Microsoft.EventHub/namespaces/eventhubs",
+      "dependsOn": [
+        "[resourceId('Microsoft.EventHub/namespaces',parameters('namespaceName'))]"
+      ],
+      "properties": {
+        "messageRetentionInDays": 1,
+        "partitionCount": 2
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "name": "[variables('storageAccountName')]",
+      "apiVersion": "2016-01-01",
+      "location": "[resourceGroup().location]",
+      "sku": {
+        "name": "[variables('storageAccountType')]"
+      },
+      "kind": "Storage",
+      "properties": {
+      }
+    },
+    {
+      "name": "[variables('streamAnalyticsName')]",
+      "type": "Microsoft.StreamAnalytics/streamingjobs",
+      "apiVersion": "2016-03-01",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.EventHub/namespaces', parameters('namespaceName'))]",
+        "[resourceId('Microsoft.EventHub/namespaces/eventhubs', parameters('namespaceName'), variables('sourceEventHubName'))]",
+        "[resourceId('Microsoft.EventHub/namespaces/eventhubs', parameters('namespaceName'), variables('destinationEventHubName'))]"
+      ],
+      "properties": {
+        "sku": {
+          "name": "Standard"
+        },
+        "outputStartMode": "JobStartTime",
+        "inputs": [
+          {
+            "name": "inputSourceEvents",
+            "properties": {
+              "type": "Stream",
+              "datasource": {
+                "type": "Microsoft.ServiceBus/EventHub",
+                "properties": {
+                  "eventHubName": "[variables('sourceEventHubName')]",
+                  "serviceBusNamespace": "[parameters('namespaceName')]",
+                  "sharedAccessPolicyName": "[variables('defaultSASKeyName')]",
+                  "sharedAccessPolicyKey": "[listkeys(variables('authRuleResourceId'), variables('ehVersion')).primaryKey]"
+                }
+              },
+              "compression": {
+                "type": "None"
+              },
+              "serialization": {
+                "type": "Json",
+                "properties": {
+                  "encoding": "UTF8"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "name": "outputDestinationEvents",
+            "properties": {
+              "type": "Stream",
+              "datasource": {
+                "type": "Microsoft.ServiceBus/EventHub",
+                "properties": {
+                  "eventHubName": "[variables('destinationEventHubName')]",
+                  "serviceBusNamespace": "[parameters('namespaceName')]",
+                  "sharedAccessPolicyName": "[variables('defaultSASKeyName')]",
+                  "sharedAccessPolicyKey": "[listkeys(variables('authRuleResourceId'), variables('ehVersion')).primaryKey]"
+                }
+              },
+              "compression": {
+                "type": "None"
+              },
+              "serialization": {
+                "type": "Json",
+                "properties": {
+                  "encoding": "UTF8"
+                }
+              }
+            }
+          }
+        ],
+        "transformation": {
+          "name": "Transformation",
+          "properties": {
+            "streamingUnits": 1,
+            "query": "SELECT\r\n    Name,\r\n    SUBSTRING(CAST(MIN(DateTime) as nvarchar(max)),1,16) as DateTime,\r\n    COUNT(DateTime) as CountNum,\r\n    SUM(\"Distance\")\r\nINTO\r\n    outputDestinationEvents\r\nFROM\r\n    inputSourceEvents TIMESTAMP BY DateTime\r\nGROUP BY\r\n    TumblingWindow( minute , 1 ),\r\n    Name"
+          }
+        },
+        "functions": []
+      }
+    }
+  ],
+  "outputs": {
+    "eventHubConnectionString": {
+      "type": "string",
+      "value": "[listkeys(variables('authRuleResourceId'), variables('ehVersion')).primaryConnectionString]"
+    },
+    "sourceEventHubName": {
+      "type": "string",
+      "value": "[variables('sourceEventHubName')]"
+    },
+    "functionAppName": {
+      "type": "string",
+      "value": "[variables('functionAppName')]"
+    }
+  }
+}

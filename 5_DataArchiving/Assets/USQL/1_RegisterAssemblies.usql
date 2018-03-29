@@ -1,0 +1,8 @@
+﻿DROP ASSEMBLY IF EXISTS [Avro];
+CREATE ASSEMBLY [Avro] FROM @"/Assemblies/Avro.dll";
+DROP ASSEMBLY IF EXISTS [Microsoft.Analytics.Samples.Formats];
+CREATE ASSEMBLY [Microsoft.Analytics.Samples.Formats] FROM @"/Assemblies/Microsoft.Analytics.Samples.Formats.dll";
+DROP ASSEMBLY IF EXISTS [Newtonsoft.Json];
+CREATE ASSEMBLY [Newtonsoft.Json] FROM @"/Assemblies/Newtonsoft.Json.dll";
+DROP ASSEMBLY IF EXISTS [log4net];
+CREATE ASSEMBLY [log4net] FROM @"/Assemblies/log4net.dll";
