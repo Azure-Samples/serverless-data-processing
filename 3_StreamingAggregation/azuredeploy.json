@@ -1,0 +1,202 @@
+{
+  "$schema": "http://schema.management.azure.com/schemas/2014-04-01-preview/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "namespaceName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the EventHub namespace"
+      }
+    },
+    "sourceEventHubName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the Source Event Hub"
+      },
+      "defaultValue": "sourceeventhub"
+    },
+    "destinationEventHubName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the Destination Event Hub"
+      },
+      "defaultValue": "destinationeventhub"
+    },
+    "streamAnalyticsName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the Stream Analytics Job"
+      },
+      "defaultValue": "eventstreamaggregation"
+    },
+    "storageAccountType": {
+      "type": "string",
+      "defaultValue": "Standard_LRS",
+      "allowedValues": [
+        "Standard_LRS",
+        "Standard_GRS",
+        "Standard_ZRS",
+        "Premium_LRS"
+      ],
+      "metadata": {
+        "description": "Storage Account type"
+      }
+    }
+  },
+  "variables": {
+    "defaultSASKeyName": "RootManageSharedAccessKey",
+    "authRuleResourceId": "[resourceId('Microsoft.EventHub/namespaces/authorizationRules', parameters('namespaceName'), variables('defaultSASKeyName'))]",
+    "ehVersion": "2017-04-01",
+    "storageAccountName": "[concat(uniquestring(resourceGroup().id), 'standardsa')]"
+  },
+  "resources": [
+    {
+      "apiVersion": "2017-04-01",
+      "name": "[parameters('namespaceName')]",
+      "type": "Microsoft.EventHub/namespaces",
+      "location": "[resourceGroup().location]",
+      "sku": {
+        "name": "Standard"
+      },
+      "properties": {
+        "isAutoInflateEnabled": false,
+        "maximumThroughputUnits": 0
+      }
+    },
+    {
+      "apiVersion": "2017-04-01",
+      "name": "[concat(parameters('namespaceName'), '/',parameters('sourceEventHubName'))]",
+      "type": "Microsoft.EventHub/namespaces/eventhubs",
+      "dependsOn": [
+        "[resourceId('Microsoft.EventHub/namespaces',parameters('namespaceName'))]"
+      ],
+      "properties": {
+        "messageRetentionInDays": 1,
+        "partitionCount": 2
+      }
+    },
+    {
+      "apiVersion": "2017-04-01",
+      "name": "[concat(parameters('namespaceName'), '/',parameters('destinationEventHubName'))]",
+      "type": "Microsoft.EventHub/namespaces/eventhubs",
+      "dependsOn": [
+        "[resourceId('Microsoft.EventHub/namespaces',parameters('namespaceName'))]"
+      ],
+      "properties": {
+        "messageRetentionInDays": 1,
+        "partitionCount": 2
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "name": "[variables('storageAccountName')]",
+      "apiVersion": "2016-01-01",
+      "location": "[resourceGroup().location]",
+      "sku": {
+        "name": "[parameters('storageAccountType')]"
+      },
+      "kind": "Storage",
+      "properties": {
+      }
+    },
+    {
+      "name": "[parameters('streamAnalyticsName')]",
+      "type": "Microsoft.StreamAnalytics/streamingjobs",
+      "apiVersion": "2016-03-01",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.EventHub/namespaces', parameters('namespaceName'))]",
+        "[resourceId('Microsoft.EventHub/namespaces/eventhubs', parameters('namespaceName'), parameters('sourceEventHubName'))]",
+        "[resourceId('Microsoft.EventHub/namespaces/eventhubs', parameters('namespaceName'), parameters('destinationEventHubName'))]"
+      ],
+      "properties": {
+        "sku": {
+          "name": "Standard"
+        },
+        "outputStartMode": "JobStartTime",
+        "inputs": [
+          {
+            "name": "inputSourceEvents",
+            "properties": {
+              "type": "Stream",
+              "datasource": {
+                "type": "Microsoft.ServiceBus/EventHub",
+                "properties": {
+                  "eventHubName": "[parameters('sourceEventHubName')]",
+                  "serviceBusNamespace": "[parameters('namespaceName')]",
+                  "sharedAccessPolicyName": "[variables('defaultSASKeyName')]",
+                  "sharedAccessPolicyKey": "[listkeys(variables('authRuleResourceId'), variables('ehVersion')).primaryKey]"
+                }
+              },
+              "compression": {
+                "type": "None"
+              },
+              "serialization": {
+                "type": "Json",
+                "properties": {
+                  "encoding": "UTF8"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "name": "outputDestinationEvents",
+            "properties": {
+              "type": "Stream",
+              "datasource": {
+                "type": "Microsoft.ServiceBus/EventHub",
+                "properties": {
+                  "eventHubName": "[parameters('destinationEventHubName')]",
+                  "serviceBusNamespace": "[parameters('namespaceName')]",
+                  "sharedAccessPolicyName": "[variables('defaultSASKeyName')]",
+                  "sharedAccessPolicyKey": "[listkeys(variables('authRuleResourceId'), variables('ehVersion')).primaryKey]"
+                }
+              },
+              "compression": {
+                "type": "None"
+              },
+              "serialization": {
+                "type": "Json",
+                "properties": {
+                  "encoding": "UTF8"
+                }
+              }
+            }
+          }
+        ],
+        "transformation": {
+          "name": "Transformation",
+          "properties": {
+            "streamingUnits": 1,
+            "query": "SELECT\r\n    Name,\r\n    SUBSTRING(CAST(MIN(DateTime) as nvarchar(max)),1,16) as DateTime,\r\n    COUNT(DateTime) as CountNum,\r\n    SUM(\"Distance\")\r\nINTO\r\n    outputDestinationEvents\r\nFROM\r\n    inputSourceEvents TIMESTAMP BY DateTime\r\nGROUP BY\r\n    TumblingWindow( minute , 1 ),\r\n    Name"
+          }
+        },
+        "functions": []
+      }
+    }
+  ],
+  "outputs": {
+    "eventHubConnectionString": {
+      "type": "string",
+      "value": "[listkeys(variables('authRuleResourceId'), variables('ehVersion')).primaryConnectionString]"
+    },
+    "sourceEventHubName": {
+      "type": "string",
+      "value": "[parameters('sourceEventHubName')]"
+    },
+    "destinationEventHubName": {
+      "type": "string",
+      "value": "[parameters('destinationEventHubName')]"
+    },
+    "storageAccountName": {
+      "type": "string",
+      "value": "[variables('storageAccountName')]"
+    },
+    "storageAccountKey": {
+      "type": "string",
+      "value": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), providers('Microsoft.Storage', 'storageAccounts').apiVersions[0]).keys[0].value]"
+    }
+  }
+}

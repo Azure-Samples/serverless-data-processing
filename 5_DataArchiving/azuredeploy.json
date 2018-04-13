@@ -1,0 +1,117 @@
+{
+  "$schema": "http://schema.management.azure.com/schemas/2014-04-01-preview/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "namespaceName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the EventHub namespace"
+      }
+    },
+    "eventHubName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the Event Hub"
+      },
+      "defaultValue": "eventsource"
+    },
+    "adlAnalyticsName": {
+      "type": "string",
+      "metadata": {
+        "description": "The name of the Data Lake Analytics account to create."
+      }
+    },
+    "adlStoreName": {
+      "type": "string",
+      "metadata": {
+        "description": "The name of the Data Lake Store account to create."
+      }
+    },
+    "location": {
+      "type": "string",
+      "allowedValues": [
+        "East US 2",
+        "Central US",
+        "North Europe"
+      ],
+      "defaultValue": "East US 2",
+      "metadata": {
+        "description": "The location in which the resources will be created."
+      }
+    }
+  },
+  "variables": {
+    "defaultSASKeyName": "RootManageSharedAccessKey",
+    "authRuleResourceId": "[resourceId('Microsoft.EventHub/namespaces/authorizationRules', parameters('namespaceName'), variables('defaultSASKeyName'))]",
+    "ehVersion": "2017-04-01",
+    "adlsApiVersion": "2016-11-01",
+    "adlaApiVersion": "2016-11-01"
+  },
+  "resources": [
+    {
+      "apiVersion": "2017-04-01",
+      "name": "[parameters('namespaceName')]",
+      "type": "Microsoft.EventHub/namespaces",
+      "location": "[resourceGroup().location]",
+      "sku": {
+        "name": "Standard"
+      },
+      "properties": {
+        "isAutoInflateEnabled": false,
+        "maximumThroughputUnits": 0
+      }
+    },
+    {
+      "apiVersion": "2017-04-01",
+      "name": "[concat(parameters('namespaceName'), '/',parameters('eventHubName'))]",
+      "type": "Microsoft.EventHub/namespaces/eventhubs",
+      "dependsOn": [
+        "[resourceId('Microsoft.EventHub/namespaces',parameters('namespaceName'))]"
+      ],
+      "properties": {
+        "messageRetentionInDays": 1,
+        "partitionCount": 2
+      }
+    },
+    {
+      "name": "[parameters('adlStoreName')]",
+      "type": "Microsoft.DataLakeStore/accounts",
+      "location": "[parameters('location')]",
+      "apiVersion": "2016-11-01",
+      "dependsOn": [],
+      "tags": {}
+    },
+    {
+      "name": "[parameters('adlAnalyticsName')]",
+      "type": "Microsoft.DataLakeAnalytics/accounts",
+      "location": "[parameters('location')]",
+      "apiVersion": "2016-11-01",
+      "dependsOn": [
+        "[concat('Microsoft.DataLakeStore/accounts/', parameters('adlStoreName'))]"
+      ],
+      "tags": {},
+      "properties": {
+        "defaultDataLakeStoreAccount": "[parameters('adlStoreName')]",
+        "dataLakeStoreAccounts": [
+          {
+            "name": "[parameters('adlStoreName')]"
+          }
+        ]
+      }
+    }
+  ],
+  "outputs": {
+    "eventHubConnectionString": {
+      "type": "string",
+      "value": "[listkeys(variables('authRuleResourceId'), variables('ehVersion')).primaryConnectionString]"
+    },
+    "eventHubName": {
+      "type": "string",
+      "value": "[parameters('eventHubName')]"
+    },
+    "SharedAccessPolicyPrimaryKey": {
+      "type": "string",
+      "value": "[listkeys(variables('authRuleResourceId'), variables('ehVersion')).primaryKey]"
+    }
+  }
+}

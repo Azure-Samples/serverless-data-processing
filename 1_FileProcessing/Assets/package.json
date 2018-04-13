@@ -1,0 +1,9 @@
+{
+  "name": "FileProcessing",
+  "version": "0.0.1",
+  "private": true,
+  "description": "FileProcessing",
+  "dependencies": {
+    "azure-storage": "^2.7.0"
+  }
+}

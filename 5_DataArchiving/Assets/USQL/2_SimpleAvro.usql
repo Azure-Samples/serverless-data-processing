@@ -1,0 +1,48 @@
+﻿REFERENCE ASSEMBLY [Newtonsoft.Json];
+REFERENCE ASSEMBLY [log4net];
+REFERENCE ASSEMBLY [Avro]; 
+REFERENCE ASSEMBLY [Microsoft.Analytics.Samples.Formats];
+
+USING Microsoft.Analytics.Samples.Formats.ApacheAvro;
+USING Microsoft.Analytics.Samples.Formats.Json;
+USING System.Text;
+
+DECLARE @input_file string = @"\<Folder Name>\<Event Hub Namespace name>\<Event Hub Name>\{*}\{*}\{*}\{*}\{*}\{*}\{*}.avro";
+
+@rs =
+    EXTRACT Body byte[]
+    FROM @input_file
+    USING new AvroExtractor(@"
+        {
+            ""type"":""record"",
+            ""name"":""EventData"",
+            ""namespace"":""Microsoft.ServiceBus.Messaging"",
+            ""fields"":[
+                {""name"":""SequenceNumber"",""type"":""long""},
+                {""name"":""Offset"",""type"":""string""},
+                {""name"":""EnqueuedTimeUtc"",""type"":""string""},
+                {""name"":""SystemProperties"",""type"":{""type"":""map"",""values"":[""long"",""double"",""string"",""bytes""]}},
+                {""name"":""Properties"",""type"":{""type"":""map"",""values"":[""long"",""double"",""string"",""bytes""]}},
+                {""name"":""Body"",""type"":[""null"",""bytes""]}
+            ]
+        }
+    ");
+
+@json =
+    SELECT JsonFunctions.JsonTuple(Encoding.UTF8.GetString(Body), "..*") AS json
+    FROM @rs;
+
+@cnt =
+    SELECT json["Name"] AS name,
+           Convert.ToDouble(json["Distance"]) AS distance
+    FROM @json;
+
+@stat =
+    SELECT name,
+           SUM(distance) AS totaldistance
+    FROM @cnt
+    GROUP BY name;
+
+OUTPUT @stat
+    TO "/result.csv"
+    USING Outputters.Csv();
