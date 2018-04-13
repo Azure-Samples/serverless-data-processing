@@ -190,10 +190,6 @@
       "type": "string",
       "value": "[parameters('destinationEventHubName')]"
     },
-    "SharedAccessPolicyPrimaryKey": {
-      "type": "string",
-      "value": "[listkeys(variables('authRuleResourceId'), variables('ehVersion')).primaryKey]"
-    },
     "storageAccountName": {
       "type": "string",
       "value": "[variables('storageAccountName')]"
