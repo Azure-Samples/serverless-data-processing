@@ -1,3 +1,11 @@
 # serverless-data-processing
-There are 5 modules and each one has its own readme file that you could follow to run in this lab. 
-Please have different resource group names for each module when you run each module in the lab.
+There are 5 modules in this lab, each one has with its own README file:  
+
+- Module 1: File Processing
+- Module 2: Real-time Data Streaming
+- Module 3: Streaming Aggregation
+- Module 4: Stream Processing
+- Module 5: Data Archiving
+
+> **Note: **Please have different resource group names for each individual module to avoid conflicts when running multiple modules at the same time.
+> 
