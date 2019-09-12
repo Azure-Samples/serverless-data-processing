@@ -1,7 +1,13 @@
 ---
-services: functions, event-hubs, cosmos-db, stream-analytics, data-lake-analytics, storage
-platforms: javascript
-author: OGcanviz
+page_type: sample
+languages:
+- powershell
+- csharp
+- javascript
+products:
+- azure
+description: "In this tutorials you´ll learn how to use the different serverless services on Azure to process data from a streaming source"
+urlFragment: serverless-data-processing
 ---
 
 # Serverless data processing tutorials 
