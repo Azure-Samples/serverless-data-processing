@@ -10,7 +10,7 @@
     <PackageReference Include="Microsoft.Azure.EventHubs" Version="1.1.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.CommandLine" Version="2.0.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="2.0.0" />
-    <PackageReference Include="Newtonsoft.Json" Version="10.0.3" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
     <PackageReference Include="System.Linq" Version="4.3.0" />
   </ItemGroup>
 
